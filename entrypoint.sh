@@ -35,6 +35,18 @@ else
   npx sequelize-cli db:seed:all || {
     echo "[entrypoint] ⚠ Seeding failed — continuing anyway"
   }
+
+  # Optional: bulk listing seeder (5000 listings by default)
+  # Enable by setting RUN_SEED_BULK=true in .env
+  if [ "$RUN_SEED_BULK" = "true" ]; then
+    BULK_COUNT="${SEED_BULK_COUNT:-5000}"
+    echo "[entrypoint] Running bulk listing seeder (target: ${BULK_COUNT})..."
+    node src/scripts/seed-listings.js "$BULK_COUNT" || {
+      echo "[entrypoint] ⚠ Bulk seed failed — continuing anyway"
+    }
+  else
+    echo "[entrypoint] Skipping bulk seeder (set RUN_SEED_BULK=true to enable)"
+  fi
 fi
 
 echo "[entrypoint] Starting application..."
