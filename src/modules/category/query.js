@@ -3,13 +3,7 @@
 const db = require('../../utils/db')
 const { invalidate } = require('../../utils/redis')
 
-/**
- * Insert closure rows when a new category is created.
- * For a new node with the given parentId, we copy all ancestor rows
- * of the parent and add one row for the self-reference.
- */
 async function insertClosureRows(client, id, parentId) {
-  /* Self-reference (depth 0) */
   await client.query(
     `INSERT INTO category_closures(ancestor_id, descendant_id, depth)
      VALUES ($1, $1, 0)
@@ -18,7 +12,6 @@ async function insertClosureRows(client, id, parentId) {
   )
 
   if (parentId) {
-    /* Copy all ancestor rows of the parent, increase depth by 1 */
     await client.query(
       `INSERT INTO category_closures(ancestor_id, descendant_id, depth)
        SELECT ancestor_id, $1, depth + 1
@@ -30,9 +23,6 @@ async function insertClosureRows(client, id, parentId) {
   }
 }
 
-/**
- * Build nested tree from flat list of categories
- */
 function buildTree(categories, parentId = null) {
   return categories
     .filter((cat) => cat.parent_id === parentId)
@@ -42,9 +32,6 @@ function buildTree(categories, parentId = null) {
     }))
 }
 
-/**
- * GET /categories — returns full nested category tree
- */
 async function getTree() {
   const { rows } = await db.query(`
     SELECT id, parent_id, name, slug, icon_url, is_active, sort_order
@@ -55,9 +42,6 @@ async function getTree() {
   return buildTree(rows, null)
 }
 
-/**
- * GET /categories/flat — flat list
- */
 async function getAll() {
   const { rows } = await db.query(`
     SELECT id, parent_id, name, slug, icon_url, is_active, sort_order
@@ -68,11 +52,7 @@ async function getAll() {
   return rows
 }
 
-/**
- * GET /categories/:id — single category with its direct children and breadcrumb path
- */
 async function getById(id) {
-  // Breadcrumb: ancestors ordered root → current (depth DESC)
   const { rows: breadcrumb } = await db.query(
     `SELECT c.id, c.name, c.slug, cc.depth
      FROM   category_closures cc
@@ -92,7 +72,6 @@ async function getById(id) {
 
   if (!rows.length) return null
 
-  // Direct children (depth = 1)
   const { rows: children } = await db.query(
     `SELECT c.id, c.parent_id, c.name, c.slug, c.icon_url, c.sort_order
      FROM   category_closures cc
@@ -107,9 +86,6 @@ async function getById(id) {
   return { ...rows[0], children, breadcrumb }
 }
 
-/**
- * GET /categories/:id/children — direct children only (depth = 1)
- */
 async function getChildren(parentId) {
   const { rows } = await db.query(
     `SELECT c.id, c.parent_id, c.name, c.slug, c.icon_url, c.sort_order
@@ -124,11 +100,6 @@ async function getChildren(parentId) {
   return rows
 }
 
-/**
- * GET /categories/:id/filters
- * Returns filter attributes applicable to the given category
- * INCLUDING inherited attributes from ancestor categories.
- */
 async function getFiltersForCategory(categoryId) {
   const { rows: attrs } = await db.query(
     `SELECT DISTINCT ON (fa.key)
@@ -172,9 +143,6 @@ async function getFiltersForCategory(categoryId) {
   }))
 }
 
-/**
- * POST /categories — create a category and insert closure rows
- */
 async function create({ id, parentId, name, slug, iconUrl, sortOrder }) {
   const client = await db.getClient()
   try {
@@ -200,9 +168,6 @@ async function create({ id, parentId, name, slug, iconUrl, sortOrder }) {
   }
 }
 
-/**
- * PATCH /categories/:id — update name / slug / icon / sort_order
- */
 async function update(id, fields) {
   const allowed = ['name', 'slug', 'icon_url', 'sort_order', 'is_active']
   const setClauses = []
@@ -230,9 +195,6 @@ async function update(id, fields) {
   return rows.length ? getById(id) : null
 }
 
-/**
- * DELETE /categories/:id — soft delete
- */
 async function softDelete(id) {
   const { rows } = await db.query(
     `UPDATE categories

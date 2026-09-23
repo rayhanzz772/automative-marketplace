@@ -4,12 +4,7 @@ const db = require('../../utils/db')
 const cuid = require('cuid')
 const { invalidate } = require('../../utils/redis')
 
-/**
- * Get all filter attributes applicable to a category (including inherited from all ancestors),
- * along with their enum options if applicable.
- */
 async function getCategoryFilters(categoryId) {
-  // Query inherited filter attributes via category_closures
   const query = `
     SELECT 
       fa.id,
@@ -48,18 +43,12 @@ async function getCategoryFilters(categoryId) {
   return rows
 }
 
-/**
- * Compute facet counts for a category (and its descendants).
- * Aggregates listing counts grouped by core dimensions (make, transmission, fuel_type, condition, year range, price range)
- * and dynamic attribute enum values.
- */
 async function getFacetCounts(categoryId) {
   const categoryCondition = categoryId
     ? `AND l.category_id IN (SELECT descendant_id FROM category_closures WHERE ancestor_id = $1)`
     : ''
   const params = categoryId ? [categoryId] : []
 
-  // Core Facets
   const makesSql = `
     SELECT l.make AS value, COUNT(*)::INT AS count
     FROM listings l
@@ -104,7 +93,6 @@ async function getFacetCounts(categoryId) {
     WHERE l.status = 'available' AND l.deleted_at IS NULL ${categoryCondition}
   `
 
-  // Dynamic Enum Attribute Facets
   const dynamicFacetsSql = `
     SELECT 
       fa.id AS attribute_id,
@@ -129,7 +117,6 @@ async function getFacetCounts(categoryId) {
     db.query(dynamicFacetsSql, params)
   ])
 
-  // Group dynamic facets by attribute
   const dynamicFacets = {}
   for (const row of dynRes.rows) {
     if (!dynamicFacets[row.attribute_key]) {
@@ -162,9 +149,6 @@ async function getFacetCounts(categoryId) {
   }
 }
 
-/**
- * Create a new filter attribute for a category
- */
 async function createAttribute({
   categoryId,
   key,
@@ -237,21 +221,9 @@ async function createAttribute({
   }
 }
 
-/**
- * Delete a filter attribute
- */
-async function softDeleteAttribute(id) {
-  const { rows } = await db.query(
-    `UPDATE filter_attributes SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
-    [id]
-  )
-  if (rows.length > 0) await invalidate('filters')
-  return rows.length > 0
-}
 
 module.exports = {
   getCategoryFilters,
   getFacetCounts,
-  createAttribute,
-  softDeleteAttribute
+  createAttribute
 }
