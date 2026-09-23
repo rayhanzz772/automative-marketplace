@@ -117,6 +117,9 @@ class CategoryController {
     }
   }
 
+  /**
+   * POST /categories
+   */
   static async create(req, res) {
     try {
       const { parent_id, name, slug, icon_url, sort_order } = req.body
@@ -138,6 +141,9 @@ class CategoryController {
     }
   }
 
+  /**
+   * PATCH /categories/:id
+   */
   static async update(req, res) {
     try {
       const data = await query.update(req.params.id, req.body)
