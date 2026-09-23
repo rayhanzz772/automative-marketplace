@@ -8,6 +8,5 @@ router.get('/status', (req, res) => {
 router.use('/categories', require('./modules/category/index'))
 router.use('/listings', require('./modules/listing/index'))
 router.use('/filters', require('./modules/filter/index'))
-router.use('/search', require('./modules/search/index'))
 
 module.exports = router

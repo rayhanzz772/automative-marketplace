@@ -7,10 +7,6 @@ const query = require('./query')
 const listingQuery = require('../listing/query')
 
 class CategoryController {
-  /**
-   * GET /categories
-   * Returns full nested category tree
-   */
   static async getTree(req, res) {
     try {
       const data = await query.getTree()
@@ -21,10 +17,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * GET /categories/:id
-   * Returns a single category with its children and breadcrumb path
-   */
   static async getById(req, res) {
     try {
       const data = await query.getById(req.params.id)
@@ -36,10 +28,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * GET /categories/:id/listings
-   * Browse listings scoped to a category + all subcategories
-   */
   static async getListings(req, res) {
     try {
       const {
@@ -104,9 +92,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * GET /categories/:id/children
-   */
   static async getChildren(req, res) {
     try {
       const data = await query.getChildren(req.params.id)
@@ -117,9 +102,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * GET /categories/:id/filters
-   */
   static async getFilters(req, res) {
     try {
       const data = await query.getFiltersForCategory(req.params.id)
@@ -130,9 +112,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * POST /categories
-   */
   static async create(req, res) {
     try {
       const { parent_id, name, slug, icon_url, sort_order } = req.body
@@ -154,9 +133,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * PATCH /categories/:id
-   */
   static async update(req, res) {
     try {
       const data = await query.update(req.params.id, req.body)
@@ -168,19 +144,6 @@ class CategoryController {
     }
   }
 
-  /**
-   * DELETE /categories/:id
-   */
-  static async remove(req, res) {
-    try {
-      const deleted = await query.softDelete(req.params.id)
-      if (!deleted) throw { code: 404, message: 'Category not found' }
-      return res.status(HttpStatusCode.Ok).json(api(null, HttpStatusCode.Ok, { req }))
-    } catch (err) {
-      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
-      return res.status(code).json(api(null, code, { err }))
-    }
-  }
 }
 
 module.exports = CategoryController
