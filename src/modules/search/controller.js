@@ -70,7 +70,7 @@ class SearchController {
 
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -84,7 +84,7 @@ class SearchController {
       const data = await query.getSuggestions(q)
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }

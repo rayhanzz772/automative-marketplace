@@ -79,7 +79,7 @@ class ListingController {
 
       return res.status(HttpStatusCode.Ok).json(response)
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -93,7 +93,7 @@ class ListingController {
       if (!data) throw { code: 404, message: 'Listing not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -110,7 +110,7 @@ class ListingController {
       if (err.name === 'ZodError') {
         return res.status(HttpStatusCode.BadRequest).json(api(null, HttpStatusCode.BadRequest, { err }))
       }
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -128,7 +128,7 @@ class ListingController {
       if (err.name === 'ZodError') {
         return res.status(HttpStatusCode.BadRequest).json(api(null, HttpStatusCode.BadRequest, { err }))
       }
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -142,7 +142,7 @@ class ListingController {
       if (!deleted) throw { code: 404, message: 'Listing not found' }
       return res.status(HttpStatusCode.Ok).json(api(null, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }

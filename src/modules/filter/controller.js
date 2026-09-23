@@ -11,7 +11,7 @@ class FilterController {
       const data = await query.getCategoryFilters(req.params.categoryId)
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -22,7 +22,7 @@ class FilterController {
       const data = await query.getFacetCounts(category_id)
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -63,7 +63,7 @@ class FilterController {
 
       return res.status(HttpStatusCode.Created).json(api(data, HttpStatusCode.Created, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -74,7 +74,7 @@ class FilterController {
       if (!deleted) throw { code: 404, message: 'Filter attribute not found' }
       return res.status(HttpStatusCode.Ok).json(api(null, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }

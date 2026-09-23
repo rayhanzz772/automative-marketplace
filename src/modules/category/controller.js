@@ -16,7 +16,7 @@ class CategoryController {
       const data = await query.getTree()
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -31,7 +31,7 @@ class CategoryController {
       if (!data) throw { code: 404, message: 'Category not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -99,7 +99,7 @@ class CategoryController {
 
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -112,7 +112,7 @@ class CategoryController {
       const data = await query.getChildren(req.params.id)
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -125,7 +125,7 @@ class CategoryController {
       const data = await query.getFiltersForCategory(req.params.id)
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -149,7 +149,7 @@ class CategoryController {
 
       return res.status(HttpStatusCode.Created).json(api(data, HttpStatusCode.Created, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -163,7 +163,7 @@ class CategoryController {
       if (!data) throw { code: 404, message: 'Category not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
@@ -177,7 +177,7 @@ class CategoryController {
       if (!deleted) throw { code: 404, message: 'Category not found' }
       return res.status(HttpStatusCode.Ok).json(api(null, HttpStatusCode.Ok, { req }))
     } catch (err) {
-      const code = err?.code ?? HttpStatusCode.InternalServerError
+      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
   }
