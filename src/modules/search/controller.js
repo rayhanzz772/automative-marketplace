@@ -2,6 +2,7 @@
 
 const { HttpStatusCode } = require('axios')
 const { api } = require('../../utils/api')
+const { buildCacheKey, withCache } = require('../../utils/redis')
 const query = require('./query')
 
 class SearchController {
@@ -44,7 +45,7 @@ class SearchController {
         }
       }
 
-      const data = await query.searchListings({
+      const params = {
         q,
         categoryId: category_id,
         make,
@@ -66,7 +67,13 @@ class SearchController {
         page: parseInt(page) || 1,
         perPage: parseInt(per_page) || 10,
         attributes
-      })
+      }
+
+      const data = await withCache(
+        await buildCacheKey('search:listings', params, ['listings']),
+        45,
+        () => query.searchListings(params)
+      )
 
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
@@ -81,7 +88,11 @@ class SearchController {
   static async suggestions(req, res) {
     try {
       const { q } = req.query
-      const data = await query.getSuggestions(q)
+      const data = await withCache(
+        await buildCacheKey('search:suggest', { q }, ['listings']),
+        60,
+        () => query.getSuggestions(q)
+      )
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)

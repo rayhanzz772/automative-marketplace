@@ -2,17 +2,13 @@
 
 const db = require('../../utils/db')
 const cuid = require('cuid')
+const { invalidate } = require('../../utils/redis')
 
-/**
- * Encode cursor object to base64
- */
 function encodeCursor(obj) {
   return Buffer.from(JSON.stringify(obj)).toString('base64')
 }
 
-/**
- * Decode base64 cursor string
- */
+
 function decodeCursor(str) {
   try {
     return JSON.parse(Buffer.from(str, 'base64').toString('utf8'))
@@ -21,9 +17,6 @@ function decodeCursor(str) {
   }
 }
 
-/**
- * Browse listings with multi-filters, sorting, and cursor-based / offset pagination.
- */
 async function getAll({
   categoryId,
   make,
@@ -43,7 +36,7 @@ async function getAll({
   sortBy = 'created_at',
   sortOrder = 'DESC',
   cursor = null,
-  limit = 10,
+  limit = null,
   page = 1,
   perPage = 10,
   attributes = {}
@@ -58,7 +51,6 @@ async function getAll({
     params.push(status)
   }
 
-  // Hierarchical category filtering via closure table
   if (categoryId) {
     conditions.push(`l.category_id IN (
       SELECT descendant_id FROM category_closures WHERE ancestor_id = $${paramIdx++}
@@ -131,7 +123,6 @@ async function getAll({
     params.push(Number(mileageMax))
   }
 
-  // Dynamic filter attributes (listing_attribute_values)
   if (attributes && typeof attributes === 'object' && Object.keys(attributes).length > 0) {
     for (const [attrId, val] of Object.entries(attributes)) {
       if (val === undefined || val === null || val === '') continue
@@ -160,7 +151,6 @@ async function getAll({
     }
   }
 
-  // Sorting
   const allowedSortColumns = {
     created_at: 'l.created_at',
     price: 'l.price',
@@ -172,7 +162,6 @@ async function getAll({
   const isAsc = sortOrder.toUpperCase() === 'ASC'
   const sortDir = isAsc ? 'ASC' : 'DESC'
 
-  // Cursor Pagination handling
   const parsedCursor = cursor ? decodeCursor(cursor) : null
   if (parsedCursor && parsedCursor.id && parsedCursor.sortValue !== undefined) {
     const operator = isAsc ? '>' : '<'
@@ -182,7 +171,6 @@ async function getAll({
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-  // Total count for metadata
   const countQuery = `
     SELECT COUNT(*)::INT AS total
     FROM listings l
@@ -191,7 +179,6 @@ async function getAll({
   const countResult = await db.query(countQuery, params)
   const total = countResult.rows[0]?.total || 0
 
-  // Fetch limit + 1 to check for has_more in cursor pagination
   const fetchLimit = pageSize + 1
   const offset = cursor ? 0 : (page - 1) * pageSize
   const dataParams = [...params, fetchLimit]
@@ -253,9 +240,9 @@ async function getAll({
     const lastItem = items[items.length - 1]
     const sortValue = sortBy === 'price' ? lastItem.price
       : sortBy === 'year' ? lastItem.year
-      : sortBy === 'mileage' ? lastItem.mileage
-      : sortBy === 'views_count' ? lastItem.views_count
-      : lastItem.created_at
+        : sortBy === 'mileage' ? lastItem.mileage
+          : sortBy === 'views_count' ? lastItem.views_count
+            : lastItem.created_at
     nextCursor = encodeCursor({ id: lastItem.id, sortValue })
   }
 
@@ -269,9 +256,6 @@ async function getAll({
   }
 }
 
-/**
- * Fetch a single listing by ID with full details, images, dynamic attributes, and category breadcrumb.
- */
 async function getById(id) {
   const listingQuery = `
     SELECT 
@@ -287,10 +271,8 @@ async function getById(id) {
 
   const listing = listingRows[0]
 
-  // Increment views count asynchronously
-  db.query(`UPDATE listings SET views_count = views_count + 1 WHERE id = $1`, [id]).catch(() => {})
+  db.query(`UPDATE listings SET views_count = views_count + 1 WHERE id = $1`, [id]).catch(() => { })
 
-  // Fetch images
   const imagesQuery = `
     SELECT id, url, sort_order, alt_text
     FROM listing_images
@@ -300,7 +282,6 @@ async function getById(id) {
   const { rows: images } = await db.query(imagesQuery, [id])
   listing.images = images
 
-  // Fetch dynamic attribute values with attribute definitions
   const attrsQuery = `
     SELECT 
       lav.id,
@@ -321,7 +302,6 @@ async function getById(id) {
   const { rows: attributes } = await db.query(attrsQuery, [id])
   listing.attributes = attributes
 
-  // Category breadcrumb
   const breadcrumbQuery = `
     SELECT c.id, c.name, c.slug, cc.depth
     FROM category_closures cc
@@ -335,9 +315,6 @@ async function getById(id) {
   return listing
 }
 
-/**
- * Create listing with images and dynamic attributes inside a PostgreSQL transaction.
- */
 async function create(data) {
   const client = await db.getClient()
   try {
@@ -386,7 +363,6 @@ async function create(data) {
 
     await client.query(insertListingSql, listingValues)
 
-    // Insert Images
     if (Array.isArray(data.images) && data.images.length > 0) {
       for (let i = 0; i < data.images.length; i++) {
         const img = data.images[i]
@@ -398,7 +374,6 @@ async function create(data) {
       }
     }
 
-    // Insert Dynamic Attributes
     if (Array.isArray(data.attributes) && data.attributes.length > 0) {
       for (const attr of data.attributes) {
         await client.query(
@@ -425,6 +400,7 @@ async function create(data) {
     }
 
     await client.query('COMMIT')
+    await invalidate('listings')
     return getById(listingId)
   } catch (err) {
     await client.query('ROLLBACK')
@@ -434,9 +410,6 @@ async function create(data) {
   }
 }
 
-/**
- * Update an existing listing.
- */
 async function update(id, data) {
   const client = await db.getClient()
   try {
@@ -509,6 +482,7 @@ async function update(id, data) {
     }
 
     await client.query('COMMIT')
+    await invalidate('listings')
     return getById(id)
   } catch (err) {
     await client.query('ROLLBACK')
@@ -518,9 +492,6 @@ async function update(id, data) {
   }
 }
 
-/**
- * Soft delete a listing (sets status -> removed and deleted_at = NOW())
- */
 async function softDelete(id) {
   const { rows } = await db.query(
     `UPDATE listings 
@@ -529,6 +500,7 @@ async function softDelete(id) {
      RETURNING id`,
     [id]
   )
+  if (rows.length > 0) await invalidate('listings')
   return rows.length > 0
 }
 

@@ -3,13 +3,18 @@
 const { HttpStatusCode } = require('axios')
 const cuid = require('cuid')
 const { api } = require('../../utils/api')
+const { buildCacheKey, withCache } = require('../../utils/redis')
 const query = require('./query')
 const listingQuery = require('../listing/query')
 
 class CategoryController {
   static async getTree(req, res) {
     try {
-      const data = await query.getTree()
+      const data = await withCache(
+        await buildCacheKey('categories:tree', {}, ['categories']),
+        300,
+        () => query.getTree()
+      )
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
@@ -19,7 +24,11 @@ class CategoryController {
 
   static async getById(req, res) {
     try {
-      const data = await query.getById(req.params.id)
+      const data = await withCache(
+        await buildCacheKey('categories:detail', { id: req.params.id }, ['categories']),
+        300,
+        () => query.getById(req.params.id)
+      )
       if (!data) throw { code: 404, message: 'Category not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
@@ -61,7 +70,7 @@ class CategoryController {
         }
       }
 
-      const data = await listingQuery.getAll({
+      const params = {
         categoryId: req.params.id,
         make,
         model,
@@ -83,7 +92,13 @@ class CategoryController {
         page: parseInt(page) || 1,
         perPage: parseInt(per_page) || 10,
         attributes
-      })
+      }
+
+      const data = await withCache(
+        await buildCacheKey('categories:listings', params, ['categories', 'listings']),
+        60,
+        () => listingQuery.getAll(params)
+      )
 
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
@@ -94,7 +109,11 @@ class CategoryController {
 
   static async getChildren(req, res) {
     try {
-      const data = await query.getChildren(req.params.id)
+      const data = await withCache(
+        await buildCacheKey('categories:children', { id: req.params.id }, ['categories']),
+        300,
+        () => query.getChildren(req.params.id)
+      )
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
@@ -104,7 +123,11 @@ class CategoryController {
 
   static async getFilters(req, res) {
     try {
-      const data = await query.getFiltersForCategory(req.params.id)
+      const data = await withCache(
+        await buildCacheKey('categories:filters', { id: req.params.id }, ['categories', 'filters']),
+        300,
+        () => query.getFiltersForCategory(req.params.id)
+      )
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)

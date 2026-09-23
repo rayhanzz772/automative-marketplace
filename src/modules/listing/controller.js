@@ -2,6 +2,7 @@
 
 const { HttpStatusCode } = require('axios')
 const { api } = require('../../utils/api')
+const { buildCacheKey, withCache } = require('../../utils/redis')
 const query = require('./query')
 const { createListingSchema, updateListingSchema } = require('./schema')
 
@@ -46,7 +47,7 @@ class ListingController {
         }
       }
 
-      const data = await query.getAll({
+      const params = {
         categoryId: category_id,
         make,
         model,
@@ -69,7 +70,13 @@ class ListingController {
         page: parseInt(page) || 1,
         perPage: parseInt(per_page) || 10,
         attributes
-      })
+      }
+
+      const data = await withCache(
+        await buildCacheKey('listings:browse', params, ['listings']),
+        45,
+        () => query.getAll(params)
+      )
 
       const response = api(data, HttpStatusCode.Ok, { req })
       if (data.next_cursor !== undefined) {
@@ -89,7 +96,11 @@ class ListingController {
    */
   static async getById(req, res) {
     try {
-      const data = await query.getById(req.params.id)
+      const data = await withCache(
+        await buildCacheKey('listings:detail', { id: req.params.id }, ['listings']),
+        60,
+        () => query.getById(req.params.id)
+      )
       if (!data) throw { code: 404, message: 'Listing not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {

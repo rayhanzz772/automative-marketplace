@@ -1,6 +1,7 @@
 'use strict'
 
 const db = require('../../utils/db')
+const { invalidate } = require('../../utils/redis')
 
 /**
  * Insert closure rows when a new category is created.
@@ -189,6 +190,7 @@ async function create({ id, parentId, name, slug, iconUrl, sortOrder }) {
 
     await client.query('COMMIT')
 
+    await invalidate('categories', 'filters')
     return getById(id)
   } catch (err) {
     await client.query('ROLLBACK')
@@ -224,6 +226,7 @@ async function update(id, fields) {
     values
   )
 
+  if (rows.length) await invalidate('categories', 'filters')
   return rows.length ? getById(id) : null
 }
 
@@ -238,6 +241,7 @@ async function softDelete(id) {
      RETURNING id`,
     [id]
   )
+  if (rows.length > 0) await invalidate('categories', 'filters')
   return rows.length > 0
 }
 

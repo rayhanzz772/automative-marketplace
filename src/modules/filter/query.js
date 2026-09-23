@@ -2,6 +2,7 @@
 
 const db = require('../../utils/db')
 const cuid = require('cuid')
+const { invalidate } = require('../../utils/redis')
 
 /**
  * Get all filter attributes applicable to a category (including inherited from all ancestors),
@@ -225,6 +226,7 @@ async function createAttribute({
     }
 
     await client.query('COMMIT')
+    await invalidate('filters')
     attribute.options = createdOptions
     return attribute
   } catch (err) {
@@ -243,6 +245,7 @@ async function softDeleteAttribute(id) {
     `UPDATE filter_attributes SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
     [id]
   )
+  if (rows.length > 0) await invalidate('filters')
   return rows.length > 0
 }
 
