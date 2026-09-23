@@ -11,11 +11,6 @@ const MIN_TTL_SECONDS = 1
 const CACHE_TIMEOUT_MS = 250
 const BREAKER_COOLDOWN_MS = 5000
 
-/* Pemutus arus. Timeout saja tidak cukup: satu request baca memanggil
-   getVersions + getCache + setCacheWithTTL berurutan, jadi saat Redis mati tiap
-   request membayar timeout tiga kali (~750ms) dan request tulis ~500ms. Begitu
-   satu operasi gagal, cache dilewati sepenuhnya selama cooldown supaya request
-   berikutnya langsung jatuh ke DB tanpa menunggu timeout lagi. */
 let skipUntil = 0
 
 function cacheSkipped() {
@@ -89,26 +84,10 @@ const delCache = async (key) => {
   }
 }
 
-/* Invalidasi dua lapis: versi namespace + pembersihan key.
-
-   Lapis 1 — versi. Key browse/search tak bisa didaftar satu per satu (kombinasi
-   filter praktis tak terbatas), jadi invalidasi dilakukan dengan menaikkan nomor
-   versi namespace. Versi ikut masuk ke dalam key, sehingga key lama langsung tak
-   terpakai. Ini yang MENJAMIN tidak ada data basi tersaji. Key versi sengaja
-   tanpa TTL: kalau sempat expire lalu di-INCR lagi dari 0, key lama dari versi 0
-   bisa terpakai kembali.
-
-   Lapis 2 — bersihkan key lama. Versi saja membuat key lama jadi yatim yang
-   menahan memori sampai TTL habis. Jadi setelah versi naik, key lama dihapus
-   dengan SCAN + UNLINK. Ini murni penghematan memori, bukan penjamin kebenaran:
-   kalau gagal, versi yang sudah naik tetap membuat key lama tak terbaca. */
 const VERSION_PREFIX = 'ver:'
 const PURGE_TIMEOUT_MS = 2000
 const PURGE_MAX_SCAN = 50
 
-/* Namespace yang naik -> prefix key yang isinya jadi basi.
-   Best-effort: prefix yang terlewat hanya menyisakan yatim, tidak menyajikan
-   data basi, karena lapis 1 sudah menanganinya. */
 const PURGE_PREFIXES = {
   listings: ['listings:', 'search:', 'categories:listings:', 'filters:facets:'],
   categories: ['categories:', 'filters:'],
@@ -128,8 +107,6 @@ async function getVersions(namespaces) {
   }
 }
 
-/* SCAN, bukan KEYS: KEYS memblokir Redis selama seluruh keyspace dipindai.
-   UNLINK, bukan DEL: penghapusan besar dilakukan di latar belakang Redis. */
 async function purgeNamespace(ns) {
   const prefixes = PURGE_PREFIXES[ns]
   if (!prefixes || cacheSkipped()) return 0
@@ -150,8 +127,6 @@ async function purgeNamespace(ns) {
     }
     if (removed > 0) log(`Cache purged: namespace '${ns}' -> ${removed} key dihapus`)
   } catch (error) {
-    /* Sengaja tidak men-trip breaker: kegagalan pembersihan tidak boleh
-       mematikan cache yang sehat. */
     console.error(`Failed to purge cache namespace '${ns}':`, error.message)
   }
   return removed
@@ -173,8 +148,6 @@ async function invalidate(...namespaces) {
     }
   }
 
-  /* Tidak di-await: respons tulis tak boleh menunggu pembersihan, dan versi
-     yang sudah naik membuat penundaan ini tidak berakibat data basi. */
   for (const ns of bumped) {
     purgeNamespace(ns).catch(() => { })
   }
