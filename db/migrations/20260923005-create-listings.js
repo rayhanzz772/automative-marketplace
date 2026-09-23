@@ -70,9 +70,9 @@ module.exports = {
       );
     `)
 
-    /* ── Indexes ──────────────────────────────────────────────────────────── */
+    /* ── Indexes ──────────── */
 
-    /* Individual columns — single-filter queries */
+    /* Individual columns */
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_listings_category_id  ON listings(category_id);
       CREATE INDEX idx_listings_make         ON listings(make);
@@ -84,27 +84,27 @@ module.exports = {
       CREATE INDEX idx_listings_city         ON listings(city);
     `)
 
-    /* Partial index — only active listings (avoids scanning deleted/sold rows) */
+    /* Partial index */
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_listings_status_active
         ON listings(status)
         WHERE status = 'available' AND deleted_at IS NULL;
     `)
 
-    /* Composite index — covers the most common multi-filter browse pattern */
+    /* Composite index */
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_listings_composite
         ON listings(status, category_id, price, year)
         WHERE deleted_at IS NULL;
     `)
 
-    /* GIN index — full-text search via tsvector */
+    /* GIN index */
     await queryInterface.sequelize.query(`
       CREATE INDEX idx_listings_search_vector
         ON listings USING GIN(search_vector);
     `)
 
-    /* ── Full-Text Search Trigger ─────────────────────────────────────────── */
+    /* ── Full-Text Search Trigger ── */
     /* Auto-rebuilds search_vector on every INSERT or UPDATE */
     await queryInterface.sequelize.query(`
       CREATE OR REPLACE FUNCTION fn_update_listing_search_vector()
