@@ -16,7 +16,9 @@
     "seed:make": "npx sequelize-cli seed:generate --name",
     "make:full": "npm run model:make -- --name",
     "make:seed": "npm run seed:make -- --name",
-    "make:all": "node src/scripts/make-all.js"
+    "make:all": "node src/scripts/make-all.js",
+    "seed:bulk": "node src/scripts/seed-listings.js",
+    "seed:listings": "node src/scripts/seed-listings.js"
   },
   "keywords": [],
   "author": "",
@@ -29,11 +31,14 @@
     "cuid": "^3.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
     "helmet": "^8.1.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "mysql2": "^3.15.3",
     "pg": "^8.16.3",
+    "rate-limit-redis": "^6.0.1",
     "sequelize": "^6.37.7",
     "sequelize-cli": "^6.6.3",
     "zod": "^4.1.12"

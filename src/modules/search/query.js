@@ -2,9 +2,6 @@
 
 const db = require('../../utils/db')
 
-/**
- * Execute full-text search combined with multi-filter combinations and category tree traversal.
- */
 async function searchListings({
   q,
   categoryId,
@@ -35,7 +32,6 @@ async function searchListings({
   let tsQueryParamIndex = null
   if (q && q.trim()) {
     tsQueryParamIndex = paramIdx++
-    // Use plainto_tsquery with 'simple' configuration matching our trigger
     conditions.push(`l.search_vector @@ plainto_tsquery('simple', $${tsQueryParamIndex})`)
     params.push(q.trim())
   }
@@ -45,7 +41,6 @@ async function searchListings({
     params.push(status)
   }
 
-  // Hierarchical category filtering via closure table
   if (categoryId) {
     conditions.push(`l.category_id IN (
       SELECT descendant_id FROM category_closures WHERE ancestor_id = $${paramIdx++}
@@ -118,7 +113,6 @@ async function searchListings({
     params.push(Number(mileageMax))
   }
 
-  // Dynamic filter attributes: check listing_attribute_values
   if (attributes && typeof attributes === 'object' && Object.keys(attributes).length > 0) {
     for (const [attrId, val] of Object.entries(attributes)) {
       if (val === undefined || val === null || val === '') continue
@@ -149,7 +143,6 @@ async function searchListings({
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`
 
-  // Sorting
   let orderByClause = 'l.created_at DESC'
   const sortDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
 
@@ -232,9 +225,6 @@ async function searchListings({
   }
 }
 
-/**
- * Autocomplete suggestions for search input.
- */
 async function getSuggestions(q) {
   if (!q || !q.trim()) return []
   const searchTerm = `${q.trim()}%`
