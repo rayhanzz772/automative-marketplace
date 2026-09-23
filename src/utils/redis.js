@@ -30,19 +30,6 @@ function withTimeout(promise, ms = CACHE_TIMEOUT_MS) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
-const setCache = async (key, value) => {
-  if (cacheSkipped()) return
-  try {
-    const todayEnd = Math.floor(new Date().setHours(23, 59, 59, 999) / 1000)
-    const ttl = Math.max(MIN_TTL_SECONDS, todayEnd - Math.floor(Date.now() / 1000))
-    await withTimeout(redis.set(key, JSON.stringify(value), 'EX', ttl))
-    log(`Cache set for key: ${key}`)
-  } catch (error) {
-    tripBreaker()
-    console.error(`Failed to set cache for key: ${key}`, error.message)
-  }
-}
-
 const setCacheWithTTL = async (key, value, ttlSeconds) => {
   if (cacheSkipped()) return
   try {
@@ -68,19 +55,6 @@ const getCache = async (key) => {
     tripBreaker()
     console.error(`Failed to get cache for key: ${key}`, error.message)
     return null
-  }
-}
-
-const delCache = async (key) => {
-  if (cacheSkipped()) return false
-  try {
-    const removed = await withTimeout(redis.del(key))
-    log(`Cache deleted for key: ${key}`)
-    return removed > 0
-  } catch (error) {
-    tripBreaker()
-    console.error(`Failed to delete cache for key: ${key}`, error.message)
-    return false
   }
 }
 
@@ -201,10 +175,8 @@ async function withCache(key, ttlSeconds, producer) {
 }
 
 module.exports = {
-  setCache,
   setCacheWithTTL,
   getCache,
-  delCache,
   buildCacheKey,
   withCache,
   invalidate

@@ -1,8 +1,6 @@
 'use strict'
 
 const db = require('../../utils/db')
-const cuid = require('cuid')
-const { invalidate } = require('../../utils/redis')
 
 async function getCategoryFilters(categoryId) {
   const query = `
