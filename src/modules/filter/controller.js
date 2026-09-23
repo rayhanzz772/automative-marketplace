@@ -7,6 +7,9 @@ const query = require('./query')
 
 class FilterController {
 
+  /**
+   * GET /filters/categories/:categoryId
+   */
   static async getCategoryFilters(req, res) {
     try {
       const data = await withCache(
@@ -21,6 +24,9 @@ class FilterController {
     }
   }
 
+  /**
+   * GET /filters/facets
+   */
   static async getFacets(req, res) {
     try {
       const { category_id } = req.query

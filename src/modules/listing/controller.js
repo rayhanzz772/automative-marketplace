@@ -9,7 +9,6 @@ const { createListingSchema, updateListingSchema } = require('./schema')
 class ListingController {
   /**
    * GET /listings
-   * Browse listings with filters, sorting + cursor / offset pagination
    */
   static async getAll(req, res) {
     try {
@@ -38,7 +37,6 @@ class ListingController {
         ...rest
       } = req.query
 
-      // Dynamic attribute filters (e.g. attr_*)
       const attributes = {}
       for (const [key, val] of Object.entries(rest)) {
         if (key.startsWith('attr_')) {

@@ -8,6 +8,10 @@ const query = require('./query')
 const listingQuery = require('../listing/query')
 
 class CategoryController {
+
+  /**
+   * GET /categories/tree
+   */
   static async getTree(req, res) {
     try {
       const data = await withCache(
@@ -22,6 +26,9 @@ class CategoryController {
     }
   }
 
+  /**
+   * GET /categories/:id
+   */
   static async getById(req, res) {
     try {
       const data = await withCache(
@@ -37,6 +44,9 @@ class CategoryController {
     }
   }
 
+  /**
+   * GET /categories/:id/listings
+   */
   static async getListings(req, res) {
     try {
       const {
@@ -100,34 +110,6 @@ class CategoryController {
         () => listingQuery.getAll(params)
       )
 
-      return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
-    } catch (err) {
-      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
-      return res.status(code).json(api(null, code, { err }))
-    }
-  }
-
-  static async getChildren(req, res) {
-    try {
-      const data = await withCache(
-        await buildCacheKey('categories:children', { id: req.params.id }, ['categories']),
-        300,
-        () => query.getChildren(req.params.id)
-      )
-      return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
-    } catch (err) {
-      const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
-      return res.status(code).json(api(null, code, { err }))
-    }
-  }
-
-  static async getFilters(req, res) {
-    try {
-      const data = await withCache(
-        await buildCacheKey('categories:filters', { id: req.params.id }, ['categories', 'filters']),
-        300,
-        () => query.getFiltersForCategory(req.params.id)
-      )
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)

@@ -149,81 +149,8 @@ async function getFacetCounts(categoryId) {
   }
 }
 
-async function createAttribute({
-  categoryId,
-  key,
-  label,
-  attrType,
-  unit,
-  minValue,
-  maxValue,
-  isRequired = false,
-  isSearchable = true,
-  sortOrder = 0,
-  options = []
-}) {
-  const client = await db.getClient()
-  try {
-    await client.query('BEGIN')
-    const attrId = cuid()
-
-    const insertSql = `
-      INSERT INTO filter_attributes (
-        id, category_id, key, label, attr_type, unit,
-        min_value, max_value, is_required, is_searchable, sort_order, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
-      RETURNING *
-    `
-    const { rows: [attribute] } = await client.query(insertSql, [
-      attrId,
-      categoryId,
-      key,
-      label,
-      attrType,
-      unit || null,
-      minValue ?? null,
-      maxValue ?? null,
-      isRequired,
-      isSearchable,
-      sortOrder
-    ])
-
-    const createdOptions = []
-    if (attrType === 'enum' && Array.isArray(options) && options.length > 0) {
-      for (let i = 0; i < options.length; i++) {
-        const opt = options[i]
-        const optId = cuid()
-        const optSql = `
-          INSERT INTO attribute_options (id, attribute_id, label, value, sort_order, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-          RETURNING *
-        `
-        const { rows: [optRow] } = await client.query(optSql, [
-          optId,
-          attrId,
-          opt.label,
-          opt.value,
-          opt.sort_order ?? i
-        ])
-        createdOptions.push(optRow)
-      }
-    }
-
-    await client.query('COMMIT')
-    await invalidate('filters')
-    attribute.options = createdOptions
-    return attribute
-  } catch (err) {
-    await client.query('ROLLBACK')
-    throw err
-  } finally {
-    client.release()
-  }
-}
-
 
 module.exports = {
   getCategoryFilters,
-  getFacetCounts,
-  createAttribute
+  getFacetCounts
 }
