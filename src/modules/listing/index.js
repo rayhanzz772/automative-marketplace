@@ -4,15 +4,14 @@ const express = require('express')
 const router = express.Router()
 const ListingController = require('./controller')
 const SearchController = require('../search/controller')
-const { createRateLimiter } = require('../../utils/helper')
 
-router.get('/search/suggest', createRateLimiter(10), SearchController.suggestions)
-router.get('/search', createRateLimiter(10), SearchController.search)
+router.get('/search/suggest', SearchController.suggestions)
+router.get('/search', SearchController.search)
 
-router.get('/', createRateLimiter(10), ListingController.getAll)
-router.post('/', createRateLimiter(5), ListingController.create)
-router.get('/:id', createRateLimiter(10), ListingController.getById)
-router.patch('/:id', createRateLimiter(5), ListingController.update)
-router.delete('/:id', createRateLimiter(5), ListingController.remove)
+router.get('/', ListingController.getAll)
+router.post('/', ListingController.create)
+router.get('/:id', ListingController.getById)
+router.patch('/:id', ListingController.update)
+router.delete('/:id', ListingController.remove)
 
 module.exports = router

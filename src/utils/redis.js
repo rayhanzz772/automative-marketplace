@@ -89,13 +89,31 @@ const delCache = async (key) => {
   }
 }
 
-/* Invalidasi berbasis versi namespace.
-   Key browse/search tak bisa didaftar satu per satu (kombinasi filter praktis tak
-   terbatas), jadi invalidasi dilakukan dengan menaikkan nomor versi namespace.
-   Versi ikut masuk ke dalam key, sehingga key lama langsung tak terpakai dan
-   expire sendiri lewat TTL. Key versi sengaja tanpa TTL: kalau sempat expire lalu
-   di-INCR lagi dari 0, key lama dari versi 0 bisa terpakai kembali. */
+/* Invalidasi dua lapis: versi namespace + pembersihan key.
+
+   Lapis 1 — versi. Key browse/search tak bisa didaftar satu per satu (kombinasi
+   filter praktis tak terbatas), jadi invalidasi dilakukan dengan menaikkan nomor
+   versi namespace. Versi ikut masuk ke dalam key, sehingga key lama langsung tak
+   terpakai. Ini yang MENJAMIN tidak ada data basi tersaji. Key versi sengaja
+   tanpa TTL: kalau sempat expire lalu di-INCR lagi dari 0, key lama dari versi 0
+   bisa terpakai kembali.
+
+   Lapis 2 — bersihkan key lama. Versi saja membuat key lama jadi yatim yang
+   menahan memori sampai TTL habis. Jadi setelah versi naik, key lama dihapus
+   dengan SCAN + UNLINK. Ini murni penghematan memori, bukan penjamin kebenaran:
+   kalau gagal, versi yang sudah naik tetap membuat key lama tak terbaca. */
 const VERSION_PREFIX = 'ver:'
+const PURGE_TIMEOUT_MS = 2000
+const PURGE_MAX_SCAN = 50
+
+/* Namespace yang naik -> prefix key yang isinya jadi basi.
+   Best-effort: prefix yang terlewat hanya menyisakan yatim, tidak menyajikan
+   data basi, karena lapis 1 sudah menanganinya. */
+const PURGE_PREFIXES = {
+  listings: ['listings:', 'search:', 'categories:listings:', 'filters:facets:'],
+  categories: ['categories:', 'filters:'],
+  filters: ['filters:', 'categories:filters:']
+}
 
 async function getVersions(namespaces) {
   if (!namespaces.length) return []
@@ -110,17 +128,55 @@ async function getVersions(namespaces) {
   }
 }
 
+/* SCAN, bukan KEYS: KEYS memblokir Redis selama seluruh keyspace dipindai.
+   UNLINK, bukan DEL: penghapusan besar dilakukan di latar belakang Redis. */
+async function purgeNamespace(ns) {
+  const prefixes = PURGE_PREFIXES[ns]
+  if (!prefixes || cacheSkipped()) return 0
+
+  let removed = 0
+  try {
+    for (const prefix of prefixes) {
+      let cursor = '0'
+      let scans = 0
+      do {
+        const [next, keys] = await withTimeout(
+          redis.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 200), PURGE_TIMEOUT_MS)
+        cursor = next
+        if (keys.length) {
+          removed += await withTimeout(redis.unlink(...keys), PURGE_TIMEOUT_MS)
+        }
+      } while (cursor !== '0' && ++scans < PURGE_MAX_SCAN)
+    }
+    if (removed > 0) log(`Cache purged: namespace '${ns}' -> ${removed} key dihapus`)
+  } catch (error) {
+    /* Sengaja tidak men-trip breaker: kegagalan pembersihan tidak boleh
+       mematikan cache yang sehat. */
+    console.error(`Failed to purge cache namespace '${ns}':`, error.message)
+  }
+  return removed
+}
+
 async function invalidate(...namespaces) {
   if (cacheSkipped()) return
+
+  const bumped = []
   for (const ns of namespaces) {
     try {
       const version = await withTimeout(redis.incr(`${VERSION_PREFIX}${ns}`))
       log(`Cache invalidated: namespace '${ns}' -> versi ${version}`)
+      bumped.push(ns)
     } catch (error) {
       tripBreaker()
       console.error(`Failed to invalidate cache namespace '${ns}':`, error.message)
       return
     }
+  }
+
+  /* Tidak di-await: respons tulis tak boleh menunggu pembersihan, dan versi
+     yang sudah naik membuat penundaan ini tidak berakibat data basi. */
+  for (const ns of bumped) {
+    purgeNamespace(ns).catch(() => { })
   }
 }
 
