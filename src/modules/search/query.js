@@ -183,7 +183,6 @@ async function searchListings({
   const dataQuery = `
     SELECT 
       l.id,
-      l.seller_id,
       l.category_id,
       c.name AS category_name,
       c.slug AS category_slug,
@@ -248,6 +247,10 @@ async function getSuggestions(q) {
     SELECT DISTINCT model AS text, 'model' AS type
     FROM listings
     WHERE model ILIKE $1 AND deleted_at IS NULL
+    UNION
+    SELECT DISTINCT city AS text, 'city' AS type
+    FROM listings
+    WHERE city ILIKE $1 AND deleted_at IS NULL
     LIMIT 10
   `
   const { rows } = await db.query(query, [searchTerm])

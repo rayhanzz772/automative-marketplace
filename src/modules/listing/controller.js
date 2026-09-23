@@ -7,7 +7,8 @@ const { createListingSchema, updateListingSchema } = require('./schema')
 
 class ListingController {
   /**
-   * GET /api/v1/listings
+   * GET /listings
+   * Browse listings with filters, sorting + cursor / offset pagination
    */
   static async getAll(req, res) {
     try {
@@ -29,12 +30,14 @@ class ListingController {
         status,
         sort_by,
         sort_order,
+        cursor,
+        limit,
         page,
         per_page,
         ...rest
       } = req.query
 
-      // Extract any dynamic attribute filters (e.g., attr_*)
+      // Dynamic attribute filters (e.g. attr_*)
       const attributes = {}
       for (const [key, val] of Object.entries(rest)) {
         if (key.startsWith('attr_')) {
@@ -61,12 +64,20 @@ class ListingController {
         status: status || 'available',
         sortBy: sort_by || 'created_at',
         sortOrder: sort_order || 'DESC',
+        cursor,
+        limit: limit ? parseInt(limit) : undefined,
         page: parseInt(page) || 1,
         perPage: parseInt(per_page) || 10,
         attributes
       })
 
-      return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
+      const response = api(data, HttpStatusCode.Ok, { req })
+      if (data.next_cursor !== undefined) {
+        response.metadata.next_cursor = data.next_cursor
+        response.metadata.has_more = data.has_more
+      }
+
+      return res.status(HttpStatusCode.Ok).json(response)
     } catch (err) {
       const code = err?.code ?? HttpStatusCode.InternalServerError
       return res.status(code).json(api(null, code, { err }))
@@ -74,7 +85,7 @@ class ListingController {
   }
 
   /**
-   * GET /api/v1/listings/:id
+   * GET /listings/:id
    */
   static async getById(req, res) {
     try {
@@ -88,7 +99,7 @@ class ListingController {
   }
 
   /**
-   * POST /api/v1/listings
+   * POST /listings
    */
   static async create(req, res) {
     try {
@@ -105,7 +116,7 @@ class ListingController {
   }
 
   /**
-   * PATCH /api/v1/listings/:id
+   * PATCH /listings/:id
    */
   static async update(req, res) {
     try {
@@ -123,7 +134,7 @@ class ListingController {
   }
 
   /**
-   * DELETE /api/v1/listings/:id
+   * DELETE /listings/:id
    */
   static async remove(req, res) {
     try {

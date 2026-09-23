@@ -25,7 +25,6 @@ module.exports = {
     await queryInterface.sequelize.query(`
       CREATE TABLE IF NOT EXISTS listings (
         id            VARCHAR(36)       NOT NULL,
-        seller_id     VARCHAR(36)       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         category_id   VARCHAR(36)       NOT NULL REFERENCES categories(id),
 
         -- Vehicle Identity
@@ -75,7 +74,6 @@ module.exports = {
 
     /* Individual columns — single-filter queries */
     await queryInterface.sequelize.query(`
-      CREATE INDEX idx_listings_seller_id    ON listings(seller_id);
       CREATE INDEX idx_listings_category_id  ON listings(category_id);
       CREATE INDEX idx_listings_make         ON listings(make);
       CREATE INDEX idx_listings_year         ON listings(year);

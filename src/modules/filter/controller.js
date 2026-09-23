@@ -5,10 +5,7 @@ const { api } = require('../../utils/api')
 const query = require('./query')
 
 class FilterController {
-  /**
-   * GET /api/v1/filters/category/:categoryId
-   * Return all filters for a category (including inherited from parent/ancestor categories)
-   */
+
   static async getCategoryFilters(req, res) {
     try {
       const data = await query.getCategoryFilters(req.params.categoryId)
@@ -19,11 +16,6 @@ class FilterController {
     }
   }
 
-  /**
-   * GET /api/v1/filters/facets
-   * Return facet counts (makes, fuel types, transmissions, price range, dynamic attr stats)
-   * Query params: category_id (optional)
-   */
   static async getFacets(req, res) {
     try {
       const { category_id } = req.query
@@ -35,10 +27,6 @@ class FilterController {
     }
   }
 
-  /**
-   * POST /api/v1/filters/attributes
-   * Define a new filter attribute for a category
-   */
   static async createAttribute(req, res) {
     try {
       const {
@@ -80,9 +68,6 @@ class FilterController {
     }
   }
 
-  /**
-   * DELETE /api/v1/filters/attributes/:id
-   */
   static async deleteAttribute(req, res) {
     try {
       const deleted = await query.softDeleteAttribute(req.params.id)

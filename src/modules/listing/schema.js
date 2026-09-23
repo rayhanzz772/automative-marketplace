@@ -3,7 +3,6 @@
 const { z } = require('zod')
 
 const createListingSchema = z.object({
-  seller_id: z.string().min(1, 'Seller ID is required'),
   category_id: z.string().min(1, 'Category ID is required'),
   make: z.string().min(1, 'Make is required'),
   model: z.string().min(1, 'Model is required'),
@@ -49,7 +48,7 @@ const createListingSchema = z.object({
     .default([])
 })
 
-const updateListingSchema = createListingSchema.partial().omit({ seller_id: true })
+const updateListingSchema = createListingSchema.partial().omit({})
 
 module.exports = {
   createListingSchema,

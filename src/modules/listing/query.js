@@ -4,7 +4,25 @@ const db = require('../../utils/db')
 const cuid = require('cuid')
 
 /**
- * Fetch paginated listings with optional filters and category tree traversal via closure table.
+ * Encode cursor object to base64
+ */
+function encodeCursor(obj) {
+  return Buffer.from(JSON.stringify(obj)).toString('base64')
+}
+
+/**
+ * Decode base64 cursor string
+ */
+function decodeCursor(str) {
+  try {
+    return JSON.parse(Buffer.from(str, 'base64').toString('utf8'))
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Browse listings with multi-filters, sorting, and cursor-based / offset pagination.
  */
 async function getAll({
   categoryId,
@@ -24,10 +42,13 @@ async function getAll({
   status = 'available',
   sortBy = 'created_at',
   sortOrder = 'DESC',
+  cursor = null,
+  limit = 10,
   page = 1,
   perPage = 10,
-  attributes = {} // e.g. { "attr_id_or_key": "value" }
+  attributes = {}
 } = {}) {
+  const pageSize = Number(limit || perPage || 10)
   const conditions = ['l.deleted_at IS NULL']
   const params = []
   let paramIdx = 1
@@ -37,7 +58,7 @@ async function getAll({
     params.push(status)
   }
 
-  // Category filtering using closure table — matches listings in this category or any descendant!
+  // Hierarchical category filtering via closure table
   if (categoryId) {
     conditions.push(`l.category_id IN (
       SELECT descendant_id FROM category_closures WHERE ancestor_id = $${paramIdx++}
@@ -110,7 +131,7 @@ async function getAll({
     params.push(Number(mileageMax))
   }
 
-  // Dynamic filter attributes: check listing_attribute_values
+  // Dynamic filter attributes (listing_attribute_values)
   if (attributes && typeof attributes === 'object' && Object.keys(attributes).length > 0) {
     for (const [attrId, val] of Object.entries(attributes)) {
       if (val === undefined || val === null || val === '') continue
@@ -130,7 +151,6 @@ async function getAll({
         params.push(attrId, val)
         paramIdx++
       } else {
-        // enum string
         conditions.push(`EXISTS (
           SELECT 1 FROM listing_attribute_values lav 
           WHERE lav.listing_id = l.id AND lav.attribute_id = $${paramIdx++} AND lav.value_enum = $${paramIdx++}
@@ -140,9 +160,7 @@ async function getAll({
     }
   }
 
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-
-  // Allowed sort columns
+  // Sorting
   const allowedSortColumns = {
     created_at: 'l.created_at',
     price: 'l.price',
@@ -151,24 +169,42 @@ async function getAll({
     views_count: 'l.views_count'
   }
   const sortCol = allowedSortColumns[sortBy] || 'l.created_at'
-  const sortDir = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+  const isAsc = sortOrder.toUpperCase() === 'ASC'
+  const sortDir = isAsc ? 'ASC' : 'DESC'
 
+  // Cursor Pagination handling
+  const parsedCursor = cursor ? decodeCursor(cursor) : null
+  if (parsedCursor && parsedCursor.id && parsedCursor.sortValue !== undefined) {
+    const operator = isAsc ? '>' : '<'
+    conditions.push(`(${sortCol}, l.id) ${operator} ($${paramIdx++}, $${paramIdx++})`)
+    params.push(parsedCursor.sortValue, parsedCursor.id)
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+  // Total count for metadata
   const countQuery = `
     SELECT COUNT(*)::INT AS total
     FROM listings l
     ${whereClause}
   `
-
   const countResult = await db.query(countQuery, params)
   const total = countResult.rows[0]?.total || 0
 
-  const offset = (page - 1) * perPage
-  const dataParams = [...params, perPage, offset]
+  // Fetch limit + 1 to check for has_more in cursor pagination
+  const fetchLimit = pageSize + 1
+  const offset = cursor ? 0 : (page - 1) * pageSize
+  const dataParams = [...params, fetchLimit]
+
+  let paginationClause = `LIMIT $${paramIdx++}`
+  if (!cursor) {
+    paginationClause += ` OFFSET $${paramIdx++}`
+    dataParams.push(offset)
+  }
 
   const dataQuery = `
     SELECT 
       l.id,
-      l.seller_id,
       l.category_id,
       c.name AS category_name,
       c.slug AS category_slug,
@@ -203,17 +239,33 @@ async function getAll({
     FROM listings l
     LEFT JOIN categories c ON c.id = l.category_id
     ${whereClause}
-    ORDER BY ${sortCol} ${sortDir}
-    LIMIT $${paramIdx++} OFFSET $${paramIdx++}
+    ORDER BY ${sortCol} ${sortDir}, l.id ${sortDir}
+    ${paginationClause}
   `
 
   const { rows } = await db.query(dataQuery, dataParams)
 
+  const hasMore = rows.length > pageSize
+  const items = hasMore ? rows.slice(0, pageSize) : rows
+
+  let nextCursor = null
+  if (items.length > 0 && hasMore) {
+    const lastItem = items[items.length - 1]
+    const sortValue = sortBy === 'price' ? lastItem.price
+      : sortBy === 'year' ? lastItem.year
+      : sortBy === 'mileage' ? lastItem.mileage
+      : sortBy === 'views_count' ? lastItem.views_count
+      : lastItem.created_at
+    nextCursor = encodeCursor({ id: lastItem.id, sortValue })
+  }
+
   return {
-    rows,
+    rows: items,
     count: total,
     page: Number(page),
-    per_page: Number(perPage)
+    per_page: pageSize,
+    next_cursor: nextCursor,
+    has_more: hasMore
   }
 }
 
@@ -225,12 +277,9 @@ async function getById(id) {
     SELECT 
       l.*,
       c.name AS category_name,
-      c.slug AS category_slug,
-      u.name AS seller_name,
-      u.email AS seller_email
+      c.slug AS category_slug
     FROM listings l
     LEFT JOIN categories c ON c.id = l.category_id
-    LEFT JOIN users u ON u.id = l.seller_id
     WHERE l.id = $1 AND l.deleted_at IS NULL
   `
   const { rows: listingRows } = await db.query(listingQuery, [id])
@@ -298,21 +347,20 @@ async function create(data) {
 
     const insertListingSql = `
       INSERT INTO listings (
-        id, seller_id, category_id, make, model, variant, year,
+        id, category_id, make, model, variant, year,
         mileage, condition, transmission, fuel_type, color, engine_cc,
         seat_count, price, is_negotiable, province, city, district,
         latitude, longitude, title, description, status, created_at, updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, $23, 'available', NOW(), NOW()
+        $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12,
+        $13, $14, $15, $16, $17, $18,
+        $19, $20, $21, $22, 'available', NOW(), NOW()
       )
       RETURNING *
     `
     const listingValues = [
       listingId,
-      data.seller_id,
       data.category_id,
       data.make,
       data.model,
@@ -336,7 +384,7 @@ async function create(data) {
       data.description || null
     ]
 
-    const { rows: [listing] } = await client.query(insertListingSql, listingValues)
+    await client.query(insertListingSql, listingValues)
 
     // Insert Images
     if (Array.isArray(data.images) && data.images.length > 0) {
@@ -428,7 +476,6 @@ async function update(id, data) {
       }
     }
 
-    // Replace images if provided
     if (Array.isArray(data.images)) {
       await client.query(`DELETE FROM listing_images WHERE listing_id = $1`, [id])
       for (let i = 0; i < data.images.length; i++) {
@@ -441,7 +488,6 @@ async function update(id, data) {
       }
     }
 
-    // Replace dynamic attributes if provided
     if (Array.isArray(data.attributes)) {
       await client.query(`DELETE FROM listing_attribute_values WHERE listing_id = $1`, [id])
       for (const attr of data.attributes) {
@@ -473,11 +519,14 @@ async function update(id, data) {
 }
 
 /**
- * Soft delete a listing
+ * Soft delete a listing (sets status -> removed and deleted_at = NOW())
  */
 async function softDelete(id) {
   const { rows } = await db.query(
-    `UPDATE listings SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+    `UPDATE listings 
+     SET status = 'sold', deleted_at = NOW(), updated_at = NOW() 
+     WHERE id = $1 AND deleted_at IS NULL 
+     RETURNING id`,
     [id]
   )
   return rows.length > 0

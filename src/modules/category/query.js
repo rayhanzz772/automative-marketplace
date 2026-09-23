@@ -1,21 +1,18 @@
 'use strict'
 
-const db = require('../../../config/config')
+const db = require('../../utils/db')
 
 /**
  * Insert closure rows when a new category is created.
  * For a new node with the given parentId, we copy all ancestor rows
  * of the parent and add one row for the self-reference.
- *
- * @param {object} client - pg PoolClient (inside a transaction)
- * @param {string} id     - new category id
- * @param {string|null} parentId
  */
 async function insertClosureRows(client, id, parentId) {
   /* Self-reference (depth 0) */
   await client.query(
     `INSERT INTO category_closures(ancestor_id, descendant_id, depth)
-     VALUES ($1, $1, 0)`,
+     VALUES ($1, $1, 0)
+     ON CONFLICT DO NOTHING`,
     [id]
   )
 
@@ -25,15 +22,40 @@ async function insertClosureRows(client, id, parentId) {
       `INSERT INTO category_closures(ancestor_id, descendant_id, depth)
        SELECT ancestor_id, $1, depth + 1
        FROM   category_closures
-       WHERE  descendant_id = $2`,
+       WHERE  descendant_id = $2
+       ON CONFLICT DO NOTHING`,
       [id, parentId]
     )
   }
 }
 
 /**
- * GET /categories — flat list ordered for tree rendering
- * Returns all active categories (client builds the tree from parent_id)
+ * Build nested tree from flat list of categories
+ */
+function buildTree(categories, parentId = null) {
+  return categories
+    .filter((cat) => cat.parent_id === parentId)
+    .map((cat) => ({
+      ...cat,
+      children: buildTree(categories, cat.id)
+    }))
+}
+
+/**
+ * GET /categories — returns full nested category tree
+ */
+async function getTree() {
+  const { rows } = await db.query(`
+    SELECT id, parent_id, name, slug, icon_url, is_active, sort_order
+    FROM   categories
+    WHERE  deleted_at IS NULL
+    ORDER  BY sort_order ASC, name ASC
+  `)
+  return buildTree(rows, null)
+}
+
+/**
+ * GET /categories/flat — flat list
  */
 async function getAll() {
   const { rows } = await db.query(`
@@ -46,10 +68,10 @@ async function getAll() {
 }
 
 /**
- * GET /categories/:id — single category with its breadcrumb path
+ * GET /categories/:id — single category with its direct children and breadcrumb path
  */
 async function getById(id) {
-  /* Breadcrumb: ancestors ordered root → current (depth DESC) */
+  // Breadcrumb: ancestors ordered root → current (depth DESC)
   const { rows: breadcrumb } = await db.query(
     `SELECT c.id, c.name, c.slug, cc.depth
      FROM   category_closures cc
@@ -68,7 +90,20 @@ async function getById(id) {
   )
 
   if (!rows.length) return null
-  return { ...rows[0], breadcrumb }
+
+  // Direct children (depth = 1)
+  const { rows: children } = await db.query(
+    `SELECT c.id, c.parent_id, c.name, c.slug, c.icon_url, c.sort_order
+     FROM   category_closures cc
+     JOIN   categories c ON c.id = cc.descendant_id
+     WHERE  cc.ancestor_id = $1
+       AND  cc.depth = 1
+       AND  c.deleted_at IS NULL
+     ORDER  BY c.sort_order ASC, c.name ASC`,
+    [id]
+  )
+
+  return { ...rows[0], children, breadcrumb }
 }
 
 /**
@@ -92,10 +127,8 @@ async function getChildren(parentId) {
  * GET /categories/:id/filters
  * Returns filter attributes applicable to the given category
  * INCLUDING inherited attributes from ancestor categories.
- * Each attribute includes its options (for enum type).
  */
 async function getFiltersForCategory(categoryId) {
-  /* Get all ancestor ids (including self) via closure table */
   const { rows: attrs } = await db.query(
     `SELECT DISTINCT ON (fa.key)
             fa.id, fa.category_id, fa.key, fa.label, fa.attr_type,
@@ -112,7 +145,6 @@ async function getFiltersForCategory(categoryId) {
 
   if (!attrs.length) return []
 
-  /* Fetch options for enum-type attributes in one query */
   const enumAttrIds = attrs
     .filter((a) => a.attr_type === 'enum')
     .map((a) => a.id)
@@ -210,6 +242,7 @@ async function softDelete(id) {
 }
 
 module.exports = {
+  getTree,
   getAll,
   getById,
   getChildren,

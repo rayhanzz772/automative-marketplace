@@ -4,23 +4,7 @@ const cuid = require('cuid')
 
 module.exports = {
   async up(queryInterface) {
-    // 1. Get or create seller user
-    const [users] = await queryInterface.sequelize.query(
-      `SELECT id FROM users LIMIT 1`
-    )
-    let sellerId
-    if (users && users.length > 0) {
-      sellerId = users[0].id
-    } else {
-      sellerId = 'user_seller_demo_001'
-      await queryInterface.sequelize.query(`
-        INSERT INTO users (id, name, username, email, password, status, created_at, updated_at)
-        VALUES ('${sellerId}', 'Auto Dealership Indo', 'autodealer', 'dealer@automarket.id', 'dummy_hash', true, NOW(), NOW())
-        ON CONFLICT (id) DO NOTHING;
-      `)
-    }
-
-    // 2. Insert Categories
+    // 1. Insert Categories
     // Tree hierarchy:
     // - Cars (cat_cars)
     //   - SUV (cat_suv)
@@ -98,7 +82,7 @@ module.exports = {
       { id: 'attr_seat_capacity', category_id: 'cat_cars', key: 'seat_capacity', label: 'Seat Capacity', attr_type: 'range', unit: 'Seats', min_value: 2, max_value: 10, is_searchable: true, sort_order: 1 },
       { id: 'attr_has_sunroof', category_id: 'cat_cars', key: 'has_sunroof', label: 'Panoramic Sunroof', attr_type: 'boolean', unit: null, min_value: null, max_value: null, is_searchable: true, sort_order: 2 },
       { id: 'attr_has_leather_seats', category_id: 'cat_cars', key: 'has_leather_seats', label: 'Leather Interior', attr_type: 'boolean', unit: null, min_value: null, max_value: null, is_searchable: true, sort_order: 3 },
-      
+
       // Defined in SUV (cat_suv) -> Inherited by 7-Seater and Compact SUV
       { id: 'attr_drive_type', category_id: 'cat_suv', key: 'drive_type', label: 'Drive Type', attr_type: 'enum', unit: null, min_value: null, max_value: null, is_searchable: true, sort_order: 1 },
       { id: 'attr_ground_clearance', category_id: 'cat_suv', key: 'ground_clearance', label: 'Ground Clearance', attr_type: 'range', unit: 'mm', min_value: 150, max_value: 300, is_searchable: true, sort_order: 2 },
@@ -144,7 +128,6 @@ module.exports = {
     const listings = [
       {
         id: 'list_fortuner_2023',
-        seller_id: sellerId,
         category_id: 'cat_7seater_suv',
         make: 'Toyota',
         model: 'Fortuner',
@@ -167,7 +150,6 @@ module.exports = {
       },
       {
         id: 'list_crv_hybrid_2024',
-        seller_id: sellerId,
         category_id: 'cat_suv',
         make: 'Honda',
         model: 'CR-V',
@@ -190,7 +172,6 @@ module.exports = {
       },
       {
         id: 'list_ioniq5_2023',
-        seller_id: sellerId,
         category_id: 'cat_ev_hybrid',
         make: 'Hyundai',
         model: 'Ioniq 5',
@@ -213,7 +194,6 @@ module.exports = {
       },
       {
         id: 'list_bmw_330i_2022',
-        seller_id: sellerId,
         category_id: 'cat_sedan',
         make: 'BMW',
         model: '330i',
@@ -236,7 +216,6 @@ module.exports = {
       },
       {
         id: 'list_hrv_2023',
-        seller_id: sellerId,
         category_id: 'cat_compact_suv',
         make: 'Honda',
         model: 'HR-V',
@@ -259,7 +238,6 @@ module.exports = {
       },
       {
         id: 'list_nmax_2024',
-        seller_id: sellerId,
         category_id: 'cat_scooter',
         make: 'Yamaha',
         model: 'NMAX 155',
@@ -282,7 +260,6 @@ module.exports = {
       },
       {
         id: 'list_zx25r_2023',
-        seller_id: sellerId,
         category_id: 'cat_sport_bike',
         make: 'Kawasaki',
         model: 'Ninja ZX-25R',
@@ -305,7 +282,6 @@ module.exports = {
       },
       {
         id: 'list_hilux_2022',
-        seller_id: sellerId,
         category_id: 'cat_pickup',
         make: 'Toyota',
         model: 'Hilux',
@@ -331,12 +307,12 @@ module.exports = {
     for (const l of listings) {
       await queryInterface.sequelize.query(`
         INSERT INTO listings (
-          id, seller_id, category_id, make, model, variant, year,
+          id, category_id, make, model, variant, year,
           mileage, condition, transmission, fuel_type, color, engine_cc,
           seat_count, price, is_negotiable, province, city, district,
           title, description, status, views_count, created_at, updated_at
         ) VALUES (
-          '${l.id}', '${l.seller_id}', '${l.category_id}', '${l.make}', '${l.model}', '${l.variant}', ${l.year},
+          '${l.id}', '${l.category_id}', '${l.make}', '${l.model}', '${l.variant}', ${l.year},
           ${l.mileage}, '${l.condition}', '${l.transmission}', '${l.fuel_type}', '${l.color}', ${l.engine_cc ?? 'NULL'},
           ${l.seat_count ?? 'NULL'}, ${l.price}, ${l.is_negotiable}, '${l.province}', '${l.city}', '${l.district}',
           '${l.title.replace(/'/g, "''")}', '${l.description.replace(/'/g, "''")}', 'available', 15, NOW(), NOW()

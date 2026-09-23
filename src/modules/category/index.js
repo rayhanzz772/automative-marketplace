@@ -4,12 +4,14 @@ const express = require('express')
 const router = express.Router()
 const CategoryController = require('./controller')
 
-router.get('/', CategoryController.getAll)
+// 4.3 Categories API Specification
+router.get('/', CategoryController.getTree)
 router.post('/', CategoryController.create)
 router.get('/:id', CategoryController.getById)
-router.patch('/:id', CategoryController.update)
-router.delete('/:id', CategoryController.remove)
+router.get('/:id/listings', CategoryController.getListings)
 router.get('/:id/children', CategoryController.getChildren)
 router.get('/:id/filters', CategoryController.getFilters)
+router.patch('/:id', CategoryController.update)
+router.delete('/:id', CategoryController.remove)
 
 module.exports = router
