@@ -1,0 +1,23 @@
+# Auto-detect text files and normalize line endings to LF in repo
+* text=auto
+
+# Shell scripts must always use LF (even when checked out on Windows)
+*.sh text eol=lf
+
+# Windows batch files must always use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files should not be normalized
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.zip binary
+*.tar.gz binary

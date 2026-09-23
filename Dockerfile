@@ -11,10 +11,12 @@ RUN npm ci
 # Copy application source
 COPY . .
 
+# Fix Windows line endings (CRLF -> LF) and ensure executable permission
+# This is needed because files created/edited on Windows have CRLF line endings
+# which break the shebang (#!/bin/sh\r is invalid) and execute permission
+RUN sed -i 's/\r$//' ./entrypoint.sh && chmod +x ./entrypoint.sh
+
 EXPOSE 8000
 
-# Make entrypoint executable
-RUN chmod +x ./entrypoint.sh
-
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]
 CMD ["npm", "run", "dev"]
