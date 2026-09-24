@@ -16,7 +16,7 @@ const pool = new Pool({
   connectionTimeoutMillis: 10000
 })
 
-const TARGET_COUNT = parseInt(process.argv[2]) || 5000
+const TARGET_COUNT = parseInt(process.argv[2]) || 1000
 const BATCH_SIZE = 500
 
 // Master data for vehicle generation
