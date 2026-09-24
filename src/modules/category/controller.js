@@ -6,6 +6,7 @@ const { api } = require('../../utils/api')
 const { buildCacheKey, withCache } = require('../../utils/redis')
 const query = require('./query')
 const listingQuery = require('../listing/query')
+const { createCategorySchema, updateCategorySchema } = require('./schema')
 
 class CategoryController {
 
@@ -122,20 +123,22 @@ class CategoryController {
    */
   static async create(req, res) {
     try {
-      const { parent_id, name, slug, icon_url, sort_order } = req.body
-      if (!name || !slug) throw { code: 400, message: 'name and slug are required' }
+      const validatedData = createCategorySchema.parse(req.body)
 
       const data = await query.create({
         id: cuid(),
-        parentId: parent_id || null,
-        name,
-        slug,
-        iconUrl: icon_url,
-        sortOrder: sort_order || 0
+        parentId: validatedData.parent_id || null,
+        name: validatedData.name,
+        slug: validatedData.slug,
+        iconUrl: validatedData.icon_url || null,
+        sortOrder: validatedData.sort_order
       })
 
       return res.status(HttpStatusCode.Created).json(api(data, HttpStatusCode.Created, { req }))
     } catch (err) {
+      if (err.name === 'ZodError') {
+        return res.status(HttpStatusCode.BadRequest).json(api(null, HttpStatusCode.BadRequest, { err }))
+      }
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }
@@ -146,10 +149,14 @@ class CategoryController {
    */
   static async update(req, res) {
     try {
-      const data = await query.update(req.params.id, req.body)
+      const validatedData = updateCategorySchema.parse(req.body)
+      const data = await query.update(req.params.id, validatedData)
       if (!data) throw { code: 404, message: 'Category not found' }
       return res.status(HttpStatusCode.Ok).json(api(data, HttpStatusCode.Ok, { req }))
     } catch (err) {
+      if (err.name === 'ZodError') {
+        return res.status(HttpStatusCode.BadRequest).json(api(null, HttpStatusCode.BadRequest, { err }))
+      }
       const code = typeof err?.code === 'number' ? err.code : (err?.status || HttpStatusCode.InternalServerError)
       return res.status(code).json(api(null, code, { err }))
     }

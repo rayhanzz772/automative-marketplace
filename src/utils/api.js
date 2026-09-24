@@ -35,15 +35,18 @@ function api(res, code, { err = null, req = null } = {}) {
       message = 'Foreign key constraint violation'
     } else if (err instanceof UniqueConstraintError) {
       message = `Duplicate entry: ${
-        err.errors[0]?.path || 'unique constraint violated'
+        err.errors?.[0]?.path || 'unique constraint violated'
       }`
     } else if (err instanceof ZodError) {
       // Handle Zod validation errors
-      const firstError = err.errors[0]
-      message =
-        firstError.path.length > 0
+      const firstError = err.issues?.[0] || err.errors?.[0]
+      if (firstError) {
+        message = firstError.path?.length > 0
           ? `${firstError.path.join('.')}: ${firstError.message}`
           : firstError.message
+      } else {
+        message = 'Validation error'
+      }
     } else if (err.name === 'schema-validator' && Array.isArray(err)) {
       // Handle custom validation errors
       message = err[0].msg
