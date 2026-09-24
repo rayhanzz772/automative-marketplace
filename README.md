@@ -32,6 +32,7 @@ Featuring **Closure Table Category Hierarchy**, **Inherited Dynamic Attributes**
 - **Schema Validation:** Zod 4.x
 - **Identifier Generation:** CUID (`cuid`)
 - **Security:** Helmet, CORS, Express Rate Limit
+- **Deployment** Docker
 
 ---
 
@@ -41,6 +42,7 @@ Before running the application, ensure you have:
 - [Node.js](https://nodejs.org/) (v18.x or higher)
 - [PostgreSQL](https://www.postgresql.org/) (v14.x or higher)
 - [Redis](https://redis.io/) (v6.x or higher)
+- [Docker](https://docs.docker.com/) (newest)
 
 ---
 
