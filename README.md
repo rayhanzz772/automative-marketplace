@@ -183,7 +183,12 @@ All responses follow a standard unified envelope:
 
 ## 🏛️ Architectural Decisions & Schema Design Rationale
 
-![Automotive Marketplace ERD](docs/erd.png)
+The following ERD represents the database structure and relationships
+between vehicle listings, categories, dynamic attributes, and related entities.
+
+<p align="center">
+  <img src="docs/erd.png" alt="Automotive Marketplace ERD" width="1000">
+</p>
 
 ### 1. Hierarchical Category Closure Table (`category_closures`)
 
