@@ -208,18 +208,90 @@ CREATE TABLE category_closures (
 );
 ```
 
+Every category has a self-reference row with `depth = 0`. A category also has one row for each ancestor: a direct parent has depth `1`, its grandparent has depth `2`, and so on. For example, the following tree produces these closure rows:
+
+```text
+Cars
+└── SUVs
+      └── 7-Seater SUV
+
+(Cars, Cars, 0)
+(Cars, SUVs, 1)
+(Cars, 7-Seater SUV, 2)
+(SUVs, SUVs, 0)
+(SUVs, 7-Seater SUV, 1)
+(7-Seater SUV, 7-Seater SUV, 0)
+```
+
+When a category is created, the application inserts its self-row and copies the new parent's ancestor rows with `depth + 1`, in the same transaction as the category insert. The primary key prevents duplicate relationships and keeps the closure table idempotent. Category deletion cascades its closure rows, while the category's `parent_id` uses `ON DELETE RESTRICT` to prevent deleting a parent that still owns children.
+
 #### Key Advantages:
-- **$O(1)$ Subtree Fetching:** Fetching all descendant IDs under any ancestor requires a single indexed index-scan:
+- **Indexed subtree filtering:** Fetching descendant IDs under an ancestor requires one indexed lookup instead of a recursive query. The database still spends time proportional to the number of descendants returned, but traversal depth does not add recursive query work:
   ```sql
   WHERE l.category_id IN (
     SELECT descendant_id FROM category_closures WHERE ancestor_id = $1
   )
   ```
-- **Instant Breadcrumbs:** Fetching full parent breadcrumbs for any category is a single indexed join ordered by `depth DESC`.
+- **Indexed breadcrumbs:** Fetching all ancestors for a category is a single join through `descendant_id`, ordered by `depth DESC` so the root appears first and the current category appears last.
+- **Direct-child queries:** Direct children are selected with `ancestor_id = $1 AND depth = 1`, avoiding a recursive expansion when rendering one level of the tree.
+- **Inherited category behavior:** The same ancestor relationship supports inherited filters. Attributes defined on a parent can be joined to every descendant without copying attribute definitions to each category.
+- **Predictable reads:** Listing browse, category detail, breadcrumb, and filter-inheritance queries all use the same normalized relationship model.
+
+#### Write and Read Trade-off:
+Closure tables duplicate relationships rather than category records. A deep or frequently re-parented tree therefore has a higher write cost: inserting or moving a node requires updating all affected ancestor/descendant pairs. That trade-off is intentional for this marketplace because category browsing, breadcrumbs, descendant listing searches, and inherited filters are read-heavy operations. The current API creates categories under an existing parent but does not expose a re-parent operation, which keeps closure maintenance small and transactional.
+
+#### Integrity Rules:
+- `depth = 0` must exist for every category.
+- `ancestor_id = descendant_id` is valid only for a self-row.
+- Every ancestor path must have exactly one `(ancestor_id, descendant_id)` pair.
+- Soft-deleted categories are excluded from API reads, while closure rows remain available for referential consistency until the category is physically removed.
 
 ---
 
 ## Indexing Strategy
+
+Indexes are designed around the application's actual predicates: active/non-deleted records, category subtree membership, typed attribute filters, sorting, and full-text search. Indexes improve candidate-row lookup, but they do not eliminate the cost of sorting, counting, joins, or returning large result sets. Query plans should be checked with `EXPLAIN (ANALYZE, BUFFERS)` after significant data-volume changes.
+
+### Category and Closure Indexes
+
+The category tables use indexes that match both navigation and visibility rules:
+
+| Index | Purpose |
+|---|---|
+| `uniq_categories_slug` (partial unique) | Enforces unique slugs for non-deleted categories while allowing a soft-deleted row's slug to be reused. |
+| `idx_categories_parent_id` (partial) | Finds direct children quickly when building or validating tree navigation. |
+| `idx_categories_is_active` (partial) | Finds active, non-deleted categories without scanning inactive rows. |
+| `PRIMARY KEY (ancestor_id, descendant_id)` | Prevents duplicate closure relationships and supports ancestor-to-descendant lookup. |
+| `idx_closure_ancestor_depth` | Supports descendant expansion and `depth = 1` direct-child queries. |
+| `idx_closure_descendant_depth` | Supports breadcrumb and ancestor lookups ordered by depth. |
+
+Partial indexes intentionally include `deleted_at IS NULL` or active-row predicates where appropriate. This keeps indexes smaller and aligns their entries with the API's default visibility rules.
+
+### Listing Lookup and Sorting Indexes
+
+The listings table combines single-column indexes with indexes for common marketplace browse paths:
+
+| Index | Query pattern |
+|---|---|
+| `idx_listings_category_id` | Joins listing rows to a selected category or its closure-derived descendants. |
+| `idx_listings_make`, `idx_listings_year`, `idx_listings_price`, `idx_listings_mileage` | Exact and range filters used by vehicle browsing. |
+| `idx_listings_fuel_type`, `idx_listings_transmission`, `idx_listings_city` | Common categorical and location filters. |
+| `idx_listings_status_active` (partial) | Keeps the default `status = 'available' AND deleted_at IS NULL` path small. |
+| `idx_listings_composite` (partial) | Supports active listing reads filtered by `status` and `category_id`, with price/year ordering or range constraints. |
+
+The API uses a stable secondary sort on `id` after the selected sort column. This makes cursor pagination deterministic when multiple listings share the same price, year, mileage, or timestamp. The available indexes help narrow the candidate set, but high-cardinality combinations of optional filters are deliberately handled by PostgreSQL's planner instead of creating an index for every possible URL.
+
+### Full-Text Search Index
+
+`search_vector` is maintained by a `BEFORE INSERT OR UPDATE` trigger. It combines weighted `simple` text vectors so identifiers and titles rank above location and description text:
+
+```text
+Weight A: title, make, model, variant
+Weight B: city, province
+Weight C: description
+```
+
+The GIN index `idx_listings_search_vector` accelerates the `search_vector @@ tsquery` match step. PostgreSQL still calculates `ts_rank` and sorts matching rows, so relevance searches can cost more than a normal indexed browse when a broad term matches many listings. This is why search result limits, selective filters, and benchmark queries matter.
 
 ### 2. Hybrid Dynamic Attributes & Inheritance (`filter_attributes` & `listing_attribute_values`)
 
@@ -248,8 +320,31 @@ CREATE INDEX idx_lav_attr_range   ON listing_attribute_values(attribute_id, valu
 CREATE INDEX idx_lav_attr_boolean ON listing_attribute_values(attribute_id, value_boolean) WHERE value_boolean IS NOT NULL;
 ```
 
+These indexes correspond directly to the `EXISTS` predicates used by listing filters. `attribute_id` is the leading column because every request filters one specific attribute before comparing its value. The partial predicates avoid indexing rows that cannot participate in that value type's lookup. Range filters use `value_min` and optionally `value_max` to support values contained within a stored interval; the unique `(listing_id, attribute_id)` constraint guarantees one value per attribute on each listing.
+
 #### Attribute Inheritance:
 When querying filters for a category (`GET /categories/:id/filters`), closure joins allow subcategories to automatically inherit attributes defined in ancestor categories without duplicating schema rows.
+
+### Index Maintenance and Validation
+
+Indexes increase insert/update cost and consume storage, so each index exists to serve a known predicate or ordering rule. After bulk seeding or production growth, validate the assumptions with:
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT descendant_id
+FROM category_closures
+WHERE ancestor_id = $1;
+
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT id, title, price
+FROM listings
+WHERE status = 'available'
+   AND deleted_at IS NULL
+ORDER BY price ASC, id ASC
+LIMIT 20;
+```
+
+The benchmark should be repeated with representative category sizes and search terms. A query may correctly use an index for filtering and still spend most of its time on ranking, sorting, aggregation, or fetching related images.
 
 ---
 
