@@ -190,6 +190,8 @@ between vehicle listings, categories, dynamic attributes, and related entities.
   <img src="docs/erd.png" alt="Automotive Marketplace ERD" width="1000">
 </p>
 
+## Category Tree Strategy
+
 ### 1. Hierarchical Category Closure Table (`category_closures`)
 
 #### Problem:
@@ -216,6 +218,8 @@ CREATE TABLE category_closures (
 - **Instant Breadcrumbs:** Fetching full parent breadcrumbs for any category is a single indexed join ordered by `depth DESC`.
 
 ---
+
+## Indexing Strategy
 
 ### 2. Hybrid Dynamic Attributes & Inheritance (`filter_attributes` & `listing_attribute_values`)
 
