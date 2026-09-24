@@ -183,6 +183,8 @@ All responses follow a standard unified envelope:
 
 ## 🏛️ Architectural Decisions & Schema Design Rationale
 
+![Automotive Marketplace ERD](docs/erd.png)
+
 ### 1. Hierarchical Category Closure Table (`category_closures`)
 
 #### Problem:
