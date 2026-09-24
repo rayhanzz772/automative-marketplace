@@ -291,12 +291,14 @@ The listings table combines single-column indexes with indexes for common market
 | Index | Query pattern |
 |---|---|
 | `idx_listings_category_id` | Joins listing rows to a selected category or its closure-derived descendants. |
-| `idx_listings_make`, `idx_listings_year`, `idx_listings_price`, `idx_listings_mileage` | Exact and range filters used by vehicle browsing. |
-| `idx_listings_fuel_type`, `idx_listings_transmission`, `idx_listings_city` | Common categorical and location filters. |
+| `idx_listings_make`, `idx_listings_year`, `idx_listings_price`, `idx_listings_mileage` | Case-sensitive exact and range access paths for the corresponding columns. |
+| `idx_listings_make_lower`, `idx_listings_city_lower`, `idx_listings_province_lower` (partial functional) | Supports the API's `LOWER(column) = LOWER($1)` filters while excluding soft-deleted rows. |
+| `idx_listings_model_lower_trgm` (partial GIN) | Supports case-insensitive substring searches using `LOWER(model) LIKE LOWER('%term%')`. Requires PostgreSQL `pg_trgm`. |
+| `idx_listings_fuel_type`, `idx_listings_transmission`, `idx_listings_city` | Common categorical filters and legacy case-sensitive access paths. The case-insensitive city path uses `idx_listings_city_lower`. |
 | `idx_listings_status_active` (partial) | Keeps the default `status = 'available' AND deleted_at IS NULL` path small. |
 | `idx_listings_composite` (partial) | Supports active listing reads filtered by `status` and `category_id`, with price/year ordering or range constraints. |
 
-The API uses a stable secondary sort on `id` after the selected sort column. This makes cursor pagination deterministic when multiple listings share the same price, year, mileage, or timestamp. The available indexes help narrow the candidate set, but high-cardinality combinations of optional filters are deliberately handled by PostgreSQL's planner instead of creating an index for every possible URL.
+The API uses a stable secondary sort on `id` after the selected sort column. This makes cursor pagination deterministic when multiple listings share the same price, year, mileage, or timestamp. The functional indexes are required because wrapping a column in `LOWER()` prevents PostgreSQL from using a normal index on the original column for the same predicate. The available indexes help narrow the candidate set, but high-cardinality combinations of optional filters are deliberately handled by PostgreSQL's planner instead of creating an index for every possible URL.
 
 ### Full-Text Search Index
 
