@@ -306,10 +306,36 @@ Run the bulk seed script to test database performance under heavy loads:
 # Seed 5,000 listings
 npm run seed:bulk
 
-# Benchmark Search & Facets via cURL / Apache Bench
+# Benchmark Search & Facets via cURL
 curl "http://localhost:8000/listings/search?q=fortuner&condition=used&sort_by=price&sort_order=ASC"
 curl "http://localhost:8000/filters"
 ```
+
+### Database Query Benchmark
+
+Run PostgreSQL execution-plan benchmarks for the main listing workflows:
+
+```bash
+npm run benchmark:queries
+```
+
+The benchmark runs `EXPLAIN (ANALYZE, BUFFERS)` against:
+
+- Search count using PostgreSQL full-text search.
+- Search results with relevance ranking and primary image lookup.
+- Normal listing browse with sorting and primary image lookup.
+- Dynamic facet aggregation.
+
+Example results with approximately 30,000 listings and a warm PostgreSQL cache:
+
+| Query | Execution time |
+|---|---:|
+| Search count | ~11 ms |
+| Search with ranking and image | ~262 ms |
+| Normal listing browse | ~23 ms |
+| Dynamic facets | ~73 ms |
+
+The full-text search query is the main database bottleneck because PostgreSQL ranks and sorts thousands of matching rows before returning the first page. Dynamic facets are the second-largest cost because they aggregate and join listing attribute values. Actual results depend on hardware, database cache state, query parameters, and concurrent traffic. For production evaluation, repeat the benchmark under concurrent load and monitor p95/p99 latency.
 
 ---
 

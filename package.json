@@ -17,6 +17,7 @@
     "make:full": "npm run model:make -- --name",
     "make:seed": "npm run seed:make -- --name",
     "make:all": "node src/scripts/make-all.js",
+    "benchmark:queries": "node src/scripts/benchmark-queries.js",
     "seed:bulk": "node src/scripts/seed-listings.js",
     "seed:listings": "node src/scripts/seed-listings.js"
   },
