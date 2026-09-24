@@ -8,6 +8,8 @@ const route = require('./src/routes')
 const { createServer } = require('node:http')
 const cookieParser = require('cookie-parser')
 const helmet = require('helmet')
+const swaggerUi = require('swagger-ui-express')
+const swaggerDocument = require('./src/swagger')
 
 const mode = process.env.NODE_ENV || 'development'
 const allowedOriginsRaw = process.env.ALLOWED_ORIGINS || ''
@@ -76,6 +78,13 @@ app.use(
     }
   })
 )
+
+app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customSiteTitle: 'Automotive Marketplace API Docs'
+}))
+app.get('/api/v1/docs.json', (req, res) => {
+  res.json(swaggerDocument)
+})
 
 app.use('/api/v1', route)
 

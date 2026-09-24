@@ -141,6 +141,23 @@ JWT_EXP=1d
    ```
    Server will be running at `http://localhost:8000`.
 
+6. **Open API Documentation:**
+   - Swagger UI: `http://localhost:8000/api/v1/docs`
+   - OpenAPI JSON: `http://localhost:8000/api/v1/docs.json`
+   - OpenAPI Live: `https://automative.rayhancreative.web.id/api/v1/docs/`
+
+   Swagger UI contains sample requests and responses for every endpoint under the `/api/v1` prefix.
+
+---
+
+## Live Deployment
+
+The application is deployed and available at:
+
+- [https://automative.rayhancreative.web.id/](https://automative.rayhancreative.web.id/)
+- API base URL: [https://automative.rayhancreative.web.id/api/v1](https://automative.rayhancreative.web.id/api/v1)
+- Live Swagger UI: [https://automative.rayhancreative.web.id/api/v1/docs/](https://automative.rayhancreative.web.id/api/v1/docs/)
+
 ---
 
 ## 📡 API Endpoints Overview
